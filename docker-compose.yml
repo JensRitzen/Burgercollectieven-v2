@@ -1,0 +1,8 @@
+services:
+  sqlite-app:
+    build: .
+    env_file:
+      - Tokens.env
+    container_name: sqlite-container
+    volumes:
+      - ./data:/app/data
