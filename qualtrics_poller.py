@@ -6,7 +6,7 @@ import zipfile
 import sqlite3
 import logging
 from logging.handlers import RotatingFileHandler
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 import pandas as pd
@@ -112,7 +112,7 @@ def upsert_row(row: pd.Series):
 
     response_id = str(response_id)
     json_data = row.to_json()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
