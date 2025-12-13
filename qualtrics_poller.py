@@ -83,6 +83,20 @@ def initialize_db():
         );
     """)
 
+   
+    # Kolommen created_at en updated_at toevoegen.
+    c.execute("PRAGMA table_info(responses);")
+    existing_cols = {row[1] for row in c.fetchall()}  # row[1] = kolomnaam
+
+    if "created_at" not in existing_cols:
+        c.execute("ALTER TABLE responses ADD COLUMN created_at TEXT;")
+        logger.info("[DB] Migratie: kolom created_at toegevoegd.")
+
+    if "updated_at" not in existing_cols:
+        c.execute("ALTER TABLE responses ADD COLUMN updated_at TEXT;")
+        logger.info("[DB] Migratie: kolom updated_at toegevoegd.")
+    
+
     conn.commit()
     conn.close()
     logger.info("[DB] Database geïnitialiseerd / gecontroleerd.")
@@ -109,6 +123,7 @@ def upsert_row(row: pd.Series):
         VALUES (?, ?, ?, ?)
         ON CONFLICT(ResponseId) DO UPDATE SET
             data = excluded.data,
+            created_at = COALESCE(responses.created_at, excluded.created_at),
             updated_at = excluded.updated_at;
     """, (response_id, json_data, now, now))
 
