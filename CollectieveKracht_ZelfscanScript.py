@@ -1,96 +1,73 @@
-"""
-Zelfscan-pipeline in 3 delen:
-
-1. CSV's inladen
-2. Opschonen (Qualtrics-vraagteksten / ImportId-rijen verwijderen)
-3. AVG-proof maken (bepaalde kolommen droppen + simpele PII-checks)
-"""
-
 import re
 import pandas as pd
 
-# ====== CONFIG – IMPORT/EXPORT BESTANDEN ======
-MAPPING_CSV = "Questions.csv"            # QID,Question
-RAW_CSV = "Zelfscan DUMMY.csv"           # ruwe Qualtrics-export
-CLEAN_CSV = "Zelfscan_clean.csv"         # output na opschonen
-AVG_CSV = "Zelfscan_avg.csv"             # output na AVG-proof
-SEP = ";"                                # scheidingsteken in CSV
-# ===============================================
+# ====== CONFIG ======
+RAW_CSV = "Zelfscan DUMMY.csv"
+CLEAN_CSV = "Zelfscan_clean.csv"
+AVG_CSV = "Zelfscan_avg.csv"
+FINAL_CSV = "Zelfscan_final.csv"
+SEP = ";"
+# ====================
 
-
-def data_extract(mapping_path: str, raw_path: str):
-    print("CSV's inladen...")
-    mapping = pd.read_csv(mapping_path, sep=";", encoding="utf-8")
+# Ruwe data inladen uit CSV bestand 
+def data_extract(raw_path: str) -> pd.DataFrame:
+    print("CSV inladen...")
     raw = pd.read_csv(raw_path, sep=SEP, engine="python", header=None)
-    print(f"- Questions geladen: {mapping.shape[0]} regels, kolommen: {list(mapping.columns)}")
     print(f"- Ruwe data geladen: {raw.shape[0]} rijen x {raw.shape[1]} kolommen\n")
-    return mapping, raw
+    return raw
 
-
-def data_cleanup(mapping: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
+#
+def data_cleanup(raw: pd.DataFrame) -> pd.DataFrame:
     print("Cleanup Qualtrics data...")
 
-    # Rij 0 = QID
+    # Header instellen
     header_row = raw.iloc[0].astype(str).tolist()
     data = raw.iloc[1:].copy()
+    data.columns = header_row
 
-    # Vraagteksten uit Questions
-    question_texts = set(
-        mapping["Question"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-    )
+    # Verwijder alle "label/vraagtekst"-rijen boven de eerste echte response rij
+    resp_candidates = ["ResponseId", "ResponseID", "responseid"]
+    resp_col = next((c for c in resp_candidates if c in data.columns), None)
 
-    def is_meta_row(row) -> bool:
-        row_str = row.astype(str).str.strip()
-        # a) ImportId-rijen
-        if row_str.str.contains("ImportId", na=False).any():
-            return True
-        # b) Rijen die vragen bevatten
-        if row_str.isin(question_texts).any():
-            return True
-        return False
+    # Regex voor ResponseId
+    resp_re = re.compile(r"^R_[A-Za-z0-9]+$")
 
-    meta_mask = data.apply(is_meta_row, axis=1)
-    n_meta = int(meta_mask.sum())
-    n_total = len(data)
+    resp_series = data[resp_col].fillna("").astype(str).str.strip()
+    data_row_mask = resp_series.str.match(resp_re)
 
-    clean_data = data[~meta_mask].copy()
-    clean_data.columns = header_row
+    first_data_pos = data_row_mask.idxmax()
+    clean_data = data.loc[first_data_pos:].copy()
     clean_data = clean_data.dropna(how="all")
 
-    print(f"- Aantal header/meta-rijen gevonden en verwijderd: {n_meta}")
-    print(f"- Overgebleven data-rijen: {len(clean_data)} (van {n_total})")
-    print(f"- Aantal kolommen (QID's): {len(clean_data.columns)}\n")
+    n_dropped = (data.index.get_loc(first_data_pos))  # aantal rijen erboven
+    print(f"- Label/vraagtekst-rijen verwijderd boven eerste response: {n_dropped}")
 
-    # Wegschrijven clean data
+    print(f"- Overgebleven rijen: {len(clean_data)}")
+    print(f"- Kolommen: {len(clean_data.columns)}\n")
+
     clean_data.to_csv(CLEAN_CSV, sep=SEP, index=False)
-    print(f"- Data clean weggeschreven naar:  {CLEAN_CSV}\n")
+    print(f"- Clean data geschreven naar: {CLEAN_CSV}\n")
 
     return clean_data
-
 
 def data_avg_proof(df: pd.DataFrame) -> pd.DataFrame:
     print("AVG-proof...")
 
-    print(f"- Start: {df.shape[0]} rijen x {df.shape[1]} kolommen")
-
-    # AVG kolommen
-    cols_to_drop = [
-        "IPAdress",  
+    # PII-kolommen verwijderen
+    col_to_delete = [
+        "IPAddress",
         "RecipientLastName",
         "RecipientFirstName",
         "RecipientEmail",
-        "Q2",    # Voornaam
-        "Q3",    # Achternaam
-        "Q4",    # Organisatie
-        "Q5",    # Jouw e-mailadres
-        "Q5_1",  # E-mailadres vertegenwoordiger
-        "Q9",    # Website-URL
+        "Q2 ",
+        "Q3",
+        "Q4",
+        "Q5",  
+        "Q5_1",
+        "Q9",
     ]
 
-    present = [c for c in cols_to_drop if c in df.columns]
+    present = [c for c in col_to_delete if c in df.columns]
     print("\n- Kolommen die als PII worden verwijderd:")
     if present:
         for c in present:
@@ -99,25 +76,39 @@ def data_avg_proof(df: pd.DataFrame) -> pd.DataFrame:
     else:
         print("  • (Geen van de geconfigureerde PII-kolommen gevonden)")
 
-    print(f"\n- Na AVG-proof: {df.shape[0]} rijen x {df.shape[1]} kolommen")
+    print(f"\n- Na kolommen verwijderen: {df.shape[0]} rijen x {df.shape[1]} kolommen")
 
-    # PII-checks op overgebleven data
-    as_str = df.astype(str)
-
+    # Regex checks
     email_re = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
     ip_re = re.compile(
         r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
     )
 
+    as_str = df.fillna("").astype(str)
+
     def count_matches(regex: re.Pattern) -> int:
         return int(as_str.apply(lambda col: col.str.contains(regex, na=False)).sum().sum())
 
-    email_hits = count_matches(email_re)
-    ip_hits = count_matches(ip_re)
+    email_hits_before = count_matches(email_re)
+    ip_hits_before = count_matches(ip_re)
 
-    print("\n- Algemene PII-controles in overgebleven kolommen:")
-    print(f"  • Cellen die op e-mailadres lijken : {email_hits}")
-    print(f"  • Cellen die op IP-adres lijken    : {ip_hits}")
+    print("\n- PII-controles in overgebleven kolommen (voor):")
+    print(f"  • Cellen die op e-mailadres lijken : {email_hits_before}")
+    print(f"  • Cellen die op IP-adres lijken    : {ip_hits_before}")
+
+    # PII waardes verwijderen in alle overgebleven kolommen
+    def redact_pii_cellwise(series: pd.Series) -> pd.Series:
+        s = series.fillna("").astype(str)
+        # Als de cel een email of ip bevat
+        mask = s.str.contains(email_re, na=False) | s.str.contains(ip_re, na=False)
+        if mask.any():
+            s.loc[mask] = ""
+        return s
+
+    # Pas toe
+    df = df.apply(redact_pii_cellwise, axis=0)
+
+    print(f"\n- Na AVG-proof: {df.shape[0]} rijen x {df.shape[1]} kolommen")
 
     # Wegschrijven
     df.to_csv(AVG_CSV, sep=SEP, index=False)
@@ -125,16 +116,48 @@ def data_avg_proof(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def data_unpivot(df: pd.DataFrame) -> pd.DataFrame:
+    print("Data unpivot...")
+
+    # Zoek ResponseId-kolom
+    resp_candidates = ["ResponseId", "ResponseID", "responseid", "Response ID"]
+    resp_col = next((c for c in resp_candidates if c in df.columns), None)
+
+    # Waardes naar String
+    resp_series = (
+        df[resp_col]
+        .astype("string")
+        .str.strip()
+    )
+
+    # Filter: alleen niet-leeg en niet-NA
+    valid_mask = resp_series.notna() & (resp_series != "")
+
+    # Alleen rijen met ResponseId
+    work = df[valid_mask].copy()
+    question_cols = [c for c in work.columns if c != resp_col]
+
+    # Unpivot
+    final_df = work.melt(
+        id_vars=[resp_col],
+        value_vars=question_cols,
+        var_name="QuestionID",
+        value_name="Answer"
+    )
+
+    final_df = final_df.rename(columns={resp_col: "ResponsID"})
+    final_df = final_df[["ResponsID", "QuestionID", "Answer"]]
+
+    # Wegschrijven
+    final_df.to_csv(FINAL_CSV, sep=SEP, index=False)
+
+    return final_df
 
 def main():
-    # User story 3.1
-    mapping, raw = data_extract(MAPPING_CSV, RAW_CSV)
-
-    # User story 3.3
-    clean = data_cleanup(mapping, raw)
-
-    # User story 3.2
-    _ = data_avg_proof(clean)
+    raw = data_extract(RAW_CSV)
+    clean = data_cleanup(raw)
+    avg = data_avg_proof(clean)
+    _ = data_unpivot(avg)
 
 
 if __name__ == "__main__":
