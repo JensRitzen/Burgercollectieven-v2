@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 
 # CONFIG
 # =======================
-INPUT_CSV = "Zelfscan_final.csv"
+INPUT_CSV = "/app/data/Zelfscan_final.csv"
 SEP = ";"
 
 GROUP_BY_QID = "Q19"
 ANALYZE_QIDS = ["Q24", "Q54"]
 
 OUT_DIR = "charts"
-TYPST_EXE = r"typst.exe"
+TYPST_EXE = "typst"
 # =======================
 
 
@@ -76,11 +76,26 @@ def make_pie_temp_png(counts: pd.DataFrame, group_value: str, qid: str, tmp_dir:
     safe_group = safe_filename(group_value)
     out_path = tmp_dir / f"pie_{safe_group}_{qid}.png"
 
+    # Bepaal index van grootste groep
+    max_idx = int(counts["Count"].astype(int).values.argmax())
+
+    # Explode: alleen grootste slice een beetje naar buiten
+    explode = [0.0] * len(values)
+    explode[max_idx] = 0.08  # pas aan naar smaak (bv. 0.05–0.15)
+
     plt.figure()
-    plt.pie(values, labels=labels, autopct="%1.1f%%")
+    plt.pie(
+        values,
+        labels=labels,
+        autopct="%1.1f%%",
+        explode=explode,
+        startangle=90,  # optioneel: iets rustiger layout
+    )
+    plt.gca().set_aspect("equal")
     plt.title(f"{qid} – {group_value}")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
+
 
     if out_path.stat().st_size == 0:
         try:
@@ -119,7 +134,7 @@ def write_typst_and_compile_pdf(group_value: str, image_paths: list[str], out_di
 
     # Compile met typst
     result = subprocess.run(
-        ["typst.exe", "compile", str(typ_path), str(pdf_path)],
+        [TYPST_EXE, "compile", str(typ_path), str(pdf_path)],
         capture_output=True,
         text=True,
     )
