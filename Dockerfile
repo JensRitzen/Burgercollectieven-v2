@@ -14,4 +14,5 @@ RUN mkdir -p /app/data
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Start het Python-script
-CMD ["python", "-u", "qualtrics_poller.py"]
+CMD ["python", "-u", "main.py"]
+
