@@ -15,7 +15,7 @@ class QualtricsPoller:
 
         for _, row in df.iterrows():
             response_id = str(row.get("ResponseId"))
-            if response_id:
+            if response_id.startswith("R_"):
                 self.database.upsert(response_id, row.to_json())
 
         after = self.database.count()
