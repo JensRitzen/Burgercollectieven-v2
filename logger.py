@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 from config import LOG_DIR
 
 
-class LoggerFactory:
+class Logger:
     @staticmethod
     def create_logger(name: str) -> logging.Logger:
         os.makedirs(LOG_DIR, exist_ok=True)
@@ -14,7 +14,7 @@ class LoggerFactory:
         logger.setLevel(logging.INFO)
 
         if logger.handlers:
-            return logger  # voorkomt dubbele handlers
+            return logger
 
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(message)s",
