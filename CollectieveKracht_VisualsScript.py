@@ -13,7 +13,7 @@ SEP = ";"
 GROUP_BY_QID = "Q19"
 ANALYZE_QIDS = ["Q24", "Q54"]
 
-OUT_DIR = "charts"
+OUT_DIR = "/app/data/charts"
 TYPST_EXE = "typst"
 # =======================
 
@@ -202,3 +202,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
