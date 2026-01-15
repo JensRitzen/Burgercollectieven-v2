@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timezone
+from typing import Optional, List, Tuple
 from config import DB_PATH
 
 
@@ -16,9 +17,14 @@ class Database:
                 ResponseId TEXT PRIMARY KEY,
                 data TEXT,
                 created_at TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                scan_status TEXT DEFAULT 'NEW',
+                scanned_at TEXT,
+                scan_error TEXT
             );
         """)
+
+        self._migrate_add_missing_columns(conn)
 
         conn.commit()
         conn.close()
