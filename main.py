@@ -14,6 +14,40 @@ from config import POLL_INTERVAL_SECONDS
 
 VISUALS_SCRIPT_PATH = "/app/CollectieveKracht_VisualsScript.py"
 
+def run_visuals(logger):
+    """
+    Draait het visuals script na de poller.
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, VISUALS_SCRIPT_PATH],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        if result.stdout.strip():
+            logger.info(f"[visuals stdout]\n{result.stdout}")
+
+        if result.stderr.strip():
+            logger.warning(f"[visuals stderr]\n{result.stderr}")
+
+        logger.info("Visuals-script succesvol afgerond.")
+
+    except FileNotFoundError:
+        logger.exception(
+            f"Visuals-script niet gevonden op {VISUALS_SCRIPT_PATH}. "
+            "Controleer of het bestand is meegekopieerd in de Docker image."
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error("Visuals-script faalde.")
+        if e.stdout:
+            logger.error(f"[visuals stdout]\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"[visuals stderr]\n{e.stderr}")
+    except Exception:
+        logger.exception("Onverwachte fout bij het draaien van het visuals-script.")
+
 def main():
     logger = Logger.create_logger("qualtrics_poller")
 
