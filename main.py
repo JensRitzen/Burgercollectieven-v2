@@ -1,12 +1,18 @@
 import time
+import sys
+import subprocess
+
 from loggers.logger import Logger
+
 from poller.qualtrics_client import QualtricsClient
 from poller.export_service import ExportService
 from poller.csv_handler import CsvHandler
 from poller.database import Database
 from poller.poller import QualtricsPoller
+
 from config import POLL_INTERVAL_SECONDS
 
+VISUALS_SCRIPT_PATH = "/app/CollectieveKracht_VisualsScript.py"
 
 def main():
     logger = Logger.create_logger("qualtrics_poller")
